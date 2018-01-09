@@ -1,4 +1,5 @@
 ﻿using Abilities;
+using GameModes;
 using Movement;
 using SubPhases;
 using System;
@@ -31,23 +32,18 @@ namespace Abilities
 
         public override void ActivateAbility()
         {
-            HostShip.OnActivationPhaseStart += RegisterDalanAbility;
+            HostShip.OnManeuverIsRevealed += RegisterDalanAbility;
         }
 
         public override void DeactivateAbility()
         {
-            HostShip.OnActivationPhaseStart -= RegisterDalanAbility;
+            HostShip.OnManeuverIsRevealed -= RegisterDalanAbility;
         }
 
         private void RegisterDalanAbility(Ship.GenericShip ship)
         {
-            Triggers.RegisterTrigger(new Trigger
-            {
-                Name = Name,
-                TriggerType = TriggerTypes.OnActivationPhaseStart,
-                TriggerOwner = HostShip.Owner.PlayerNo,
-                EventHandler = AskGuriAbility
-            });
+            RegisterAbilityTrigger(TriggerTypes.OnManeuverIsRevealed, AskGuriAbility);
+
         }
 
         private void AskGuriAbility(object sender, EventArgs e)
@@ -55,14 +51,14 @@ namespace Abilities
             if (HostShip.HasToken(typeof(Tokens.StressToken)))
             {
                 Triggers.FinishTrigger();
-                return;                
+                return;
             }
 
             GenericMovement shipMovement = HostShip.AssignedManeuver;
             if (shipMovement is TurnMovement ||
                 shipMovement is BankMovement ||
                 shipMovement is SegnorsLoopMovement)
-            {              
+            {
                 DecisionSubPhase decisionSubPhase = (DecisionSubPhase)Phases.StartTemporarySubPhaseNew(
                     Name,
                     typeof(DecisionSubPhase),
@@ -70,26 +66,36 @@ namespace Abilities
 
                 decisionSubPhase.InfoText = "Would you like to perform a Red Tallon Roll of the same maneuver?";
 
-                decisionSubPhase.AddDecision("Yes", delegate 
+                decisionSubPhase.AddDecision("Yes", delegate
                 {
                     PerformTallonRoll(shipMovement);
                     DecisionSubPhase.ConfirmDecisionNoCallback();
-                    Phases.CurrentPhase.StartPhase();
+                    Triggers.FinishTrigger();
                 });
 
-                decisionSubPhase.AddDecision("No", delegate { Triggers.FinishTrigger(); });
+                decisionSubPhase.AddDecision("No", delegate 
+                {
+                    DecisionSubPhase.ConfirmDecisionNoCallback();
+                    Triggers.FinishTrigger();
+                });
 
                 decisionSubPhase.ShowSkipButton = true;
 
-                decisionSubPhase.Start();
-                Triggers.FinishTrigger();
-
+                decisionSubPhase.Start();               
             }
         }
 
         private void PerformTallonRoll(GenericMovement shipMovement)
         {
-            HostShip.SetAssignedManeuver(new TallonRollMovement(shipMovement.Speed, shipMovement.Direction, shipMovement.Bearing, Movement.ManeuverColor.Red));
+            GenericMovement movement = HostShip.AssignedManeuver;
+            if (movement is BankMovement || movement is SegnorsLoopMovement)
+            {
+                HostShip.SetAssignedManeuver(new TallonRollBankMovement(shipMovement.Speed, shipMovement.Direction, shipMovement.Bearing, Movement.ManeuverColor.Red));
+            }
+            else
+            {
+                HostShip.SetAssignedManeuver(new TallonRollMovement(shipMovement.Speed, shipMovement.Direction, shipMovement.Bearing, Movement.ManeuverColor.Red));
+            }            
         }
     }
 }
